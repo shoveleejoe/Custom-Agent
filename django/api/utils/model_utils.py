@@ -78,7 +78,7 @@ def user_stories_acceptance_criteria_priority(primary_issue_key, primary_issue_d
         jira_utils.add_jira_comment(primary_issue_key, comment) 
 
 @tool
-def triage(ticket_number:str) -> None:
+def triage(ticket_number:str) -> str:
     """triage a given ticket and link related tickets"""
     ticket_number = str(ticket_number)
     all_tickets = jira_utils.get_all_tickets()
