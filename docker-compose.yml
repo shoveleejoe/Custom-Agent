@@ -49,6 +49,10 @@ services:
     ports:
      - 5432:5432
     environment:
+      POSTGRES_DB: vectordb
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpwd
+      PGUSER: testuser
       POSTGRES_HOST_AUTH_METHOD: trust
       PGDATA: /var/lib/postgresql/data/
     volumes:
