@@ -81,4 +81,15 @@ Requires the following
 * https://blog.logrocket.com/dockerizing-django-app/
 
 ## TODO 
-* Add coding agent tool 
+* Add coding agent tool
+
+## SentinelOne Integration Environment Variables
+
+To enable SentinelOne integration, add the following environment variables to your `.env` file or Docker Compose environment:
+
+- `S1_BASE_URL` – e.g. `https://usea1.sentinelone.net`
+- `S1_API_TOKEN` – SentinelOne API token (if using token authentication)
+- `S1_CLIENT_ID` and `S1_CLIENT_SECRET` – (optional) for OAuth2 authentication
+- `S1_SITE_ID` – (optional) required if your organization needs a site specified in API calls
+
+Ensure these are set in your environment and passed through Docker Compose as needed.

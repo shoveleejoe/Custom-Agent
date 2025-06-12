@@ -3,11 +3,14 @@ import os
 import re 
 import json 
 from typing import Union
+import logging
 
 JIRA_INSTANCE_URL = os.environ.get("JIRA_INSTANCE_URL")
 PROJECT_KEY = os.environ.get("PROJECT_KEY")
 JIRA_USERNAME = os.environ.get("JIRA_USERNAME")
 JIRA_API_TOKEN = os.environ.get("JIRA_API_TOKEN")
+
+logger = logging.getLogger("api.jira_utils")
 
 def link_jira_issue(inward_issue_key: str, outward_issue_key: str, link_type: str='Relates') -> None:
     """Links two Jira tickets.
@@ -19,6 +22,7 @@ def link_jira_issue(inward_issue_key: str, outward_issue_key: str, link_type: st
     Returns:
     """
     try:
+        logger.info(f"Invoking link_jira_issue: {inward_issue_key} -> {outward_issue_key} with link type {link_type}")
         data = json.dumps({
             "inwardIssue": {
               "key": inward_issue_key
@@ -36,9 +40,10 @@ def link_jira_issue(inward_issue_key: str, outward_issue_key: str, link_type: st
         }
         if (result := requests.post(f'{JIRA_INSTANCE_URL}/rest/api/2/issueLink', data=data, headers=headers, auth=(JIRA_USERNAME, JIRA_API_TOKEN))) and \
         (result.status_code == 201):
-            print(f'Linked successfully {inward_issue_key}->{outward_issue_key}')
+            logger.info(f'Linked successfully {inward_issue_key}->{outward_issue_key}')
     except Exception as e:
-        print(f'ERROR link_jira_issue: {e}')
+        logger.error(f'Error in link_jira_issue: {e}', exc_info=True)
+        raise
 
 def extract_tag_helper(text: str, tag: str='related') -> Union[str, None]:
     """Extract the text between two tags.
@@ -53,7 +58,8 @@ def extract_tag_helper(text: str, tag: str='related') -> Union[str, None]:
         if regex := re.compile(f'<{tag}>(.*?)<{tag}>', flags=re.DOTALL).search(text):
             return regex.group(1)
     except Exception as e:
-        print(f'ERROR extract_tag_helper: {e}')
+        logger.error(f'Error in extract_tag_helper: {e}', exc_info=True)
+        raise
 
 def parse_jira_issue_fields(data: dict) -> tuple:
     """Extract the key, summary and description fields from Jira.
@@ -76,11 +82,13 @@ def get_all_tickets() -> Union[dict, None]:
         A dictionary of Jira key, description and summary data.
     """
     try:
+        logger.info(f"Fetching all unresolved tickets for project {PROJECT_KEY}")
         if (result := requests.get(f'{JIRA_INSTANCE_URL}/rest/api/2/search?jql=project={PROJECT_KEY}+AND+resolution=unresolved&maxResults=1000', auth=(JIRA_USERNAME, JIRA_API_TOKEN))) \
         and (issues := result.json().get('issues')):
             return {parse_jira_issue_fields(issue)[0]: parse_jira_issue_fields(issue)[1] for issue in issues}
     except Exception as e:
-        print(f'ERROR get_all_tickets: {e}')
+        logger.error(f'Error in get_all_tickets: {e}', exc_info=True)
+        raise
 
 def get_ticket_data(key: str) -> Union[dict, None]:
     """Get Jira issue data. 
@@ -91,10 +99,12 @@ def get_ticket_data(key: str) -> Union[dict, None]:
         Jira ticket data.
     """
     try:
+        logger.info(f"Fetching data for ticket {key}")
         if (result := requests.get(f'{JIRA_INSTANCE_URL}/rest/agile/1.0/issue/{key}', auth=(JIRA_USERNAME, JIRA_API_TOKEN))):
             return parse_jira_issue_fields(result.json())
     except Exception as e:
-        print(f'ERROR get_ticket_data: {e}')
+        logger.error(f'Error in get_ticket_data: {e}', exc_info=True)
+        raise
 
 def add_jira_comment(key: str, comment: str)-> None:
     """Add comment to Jira issue. 
@@ -105,6 +115,7 @@ def add_jira_comment(key: str, comment: str)-> None:
     Returns:
     """
     try:
+        logger.info(f"Adding comment to ticket {key}")
         data = json.dumps({
             "body": comment
         }) 
@@ -114,9 +125,10 @@ def add_jira_comment(key: str, comment: str)-> None:
         }
         if (result := requests.post(f'{JIRA_INSTANCE_URL}/rest/api/2/issue/{key}/comment', data=data, headers=headers, auth=(JIRA_USERNAME, JIRA_API_TOKEN))) and \
         (result.status_code == 201):
-            print('Comment successful')
+            logger.info('Comment added successfully')
     except Exception as e:
-        print(f'ERROR add_jira_comment: {e}')
+        logger.error(f'Error in add_jira_comment: {e}', exc_info=True)
+        raise
 
 if __name__ == '__main__':
-    pass 
+    pass

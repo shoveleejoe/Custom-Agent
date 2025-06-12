@@ -1,11 +1,14 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+import logging
 
 # local imports 
 from api import serializers
 from api import models
 from api.utils import model_utils
+
+logger = logging.getLogger("api.views")
 
 # call automatic Jira agent  
 class JiraAgentApiView(APIView):
@@ -29,11 +32,13 @@ class JiraAgentApiView(APIView):
                         response = self.response_serializer_class(data={"response": response})
                         modelRequest = models.ModelRequest(request=request, response=response)
                         modelRequest.save()
+                        logger.info(f"Agent invoked successfully with request: {request}")
                         return Response({'output': output})
             except Exception as e:
-                print(f'ERROR JiraAgentApiView: {e}')
+                logger.error(f"Error in JiraAgentApiView: {e}", exc_info=True)
             
             return Response(
+                {"error": "An unexpected error occurred. Please try again later."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
@@ -51,5 +56,10 @@ class HealthCheck(APIView):
 class GetRecords(APIView):
     def get(self, request):
         """Get request records endpoint"""
-        data = models.ModelRequest.objects.all().values()
-        return Response({'result': str(data)})
+        try:
+            data = models.ModelRequest.objects.all().values()
+            logger.info(f"Records fetched successfully: {data}")
+            return Response({'result': str(data)})
+        except Exception as e:
+            logger.error(f"Error fetching records: {e}", exc_info=True)
+            return Response({"error": "An unexpected error occurred while fetching records."}, status=500)

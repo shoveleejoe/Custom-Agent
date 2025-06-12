@@ -7,9 +7,11 @@ from langchain_core.prompts import ChatPromptTemplate, FewShotChatMessagePromptT
 import json 
 import concurrent.futures
 import os 
+import logging
 
 # local imports
 from api.utils import jira_utils
+from api.utils.sentinelone_tools import ListThreatsTool, GetThreatDetailsTool, ListVulnerabilitiesTool, CreateDeviceAllowRuleTool
 
 with open("./api/utils/system_prompts.json") as f:
     system_prompts = json.load(f)
@@ -17,6 +19,7 @@ with open("./api/utils/example_prompts.json") as f:
     example_prompts = json.load(f)
 
 llm = OpenAI(temperature=0)
+logger = logging.getLogger("api.model_utils")
 
 class LLMTask:
     def __init__(self, system_prompt, examples, llm):
@@ -69,34 +72,49 @@ def llm_check_ticket_match(ticket1, ticket2):
     
 def user_stories_acceptance_criteria_priority(primary_issue_key, primary_issue_data):
     if llm_result := product_model.run_llm(f"<description>{primary_issue_data}<description>"):
-        print(f"llm_result: {llm_result}")
+        logger.info(f"LLM result for user stories and acceptance criteria: {llm_result}")
         user_stories = jira_utils.extract_tag_helper(llm_result,"user_stories") or ''
         acceptance_criteria = jira_utils.extract_tag_helper(llm_result,"acceptance_criteria") or ''
         priority = jira_utils.extract_tag_helper(llm_result,"priority") or ''
         thought = jira_utils.extract_tag_helper(llm_result,"thought") or ''
         comment = f"user_stories: {user_stories}\nacceptance_criteria: {acceptance_criteria}\npriority: {priority}\nthought: {thought}"
         jira_utils.add_jira_comment(primary_issue_key, comment) 
+    else:
+        logger.warning(f"No LLM result returned for primary issue {primary_issue_key}")
 
 @tool
 def triage(ticket_number:str) -> str:
     """triage a given ticket and link related tickets"""
     ticket_number = str(ticket_number)
     all_tickets = jira_utils.get_all_tickets()
-    primary_issue_key, primary_issue_data = jira_utils.get_ticket_data(ticket_number)
+    ticket_data = jira_utils.get_ticket_data(ticket_number)
+    if not ticket_data:
+        logger.error(f"No data found for ticket {ticket_number}")
+        return f"Error: No data found for ticket {ticket_number}. Please check the ticket key."
+    primary_issue_key, primary_issue_data = ticket_data
     find_related_tickets(primary_issue_key, primary_issue_data, all_tickets)
     user_stories_acceptance_criteria_priority(primary_issue_key, primary_issue_data)
     return "Task complete"
 
 jira = JiraAPIWrapper()
 toolkit = JiraToolkit.from_jira_api_wrapper(jira)
+
+# Add SentinelOne tools to the agent
+sentinelone_tools = [
+    ListThreatsTool(),
+    GetThreatDetailsTool(),
+    ListVulnerabilitiesTool(),
+    CreateDeviceAllowRuleTool(),
+]
+
 agent = initialize_agent(
-    toolkit.get_tools() + [triage], 
-    llm, 
-    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, 
-    verbose=True, 
+    toolkit.get_tools() + [triage] + sentinelone_tools,
+    llm,
+    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+    verbose=True,
     max_iterations=5,
     return_intermediate_steps=True
 )
 
 if __name__ == '__main__':
-    pass 
+    pass
