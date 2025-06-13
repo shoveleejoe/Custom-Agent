@@ -1,13 +1,24 @@
 version: '3.4'
 
 services:
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+    networks:
+      - web
+
   django:
     container_name: django
     build:
       context: ./django
       dockerfile: ./Dockerfile
-    ports:
-      - 8000:8000
     stdin_open: true   
     tty: true   
     volumes:
@@ -32,6 +43,11 @@ services:
       test: wget --no-verbose -O /dev/null --tries=1 http://localhost:8000/api/health-check || exit 1
       interval: 10s
       timeout: 5s 
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.django.rule=Host(`django.localhost`)"
 
   mesop-app:
     container_name: mesop
@@ -40,8 +56,6 @@ services:
       dockerfile: ./Dockerfile
     volumes:
      - ./mesop/src:/srv/mesop-app/src
-    ports:
-      - 8080:8080
     environment:
       - PYTHONUNBUFFERED=1
       - DOCKER_RUNNING=true
@@ -50,6 +64,11 @@ services:
         condition: service_healthy
     env_file:
       - ./config/config.ini 
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mesop.rule=Host(`mesop.localhost`)"
 
   db:
     hostname: db
@@ -71,3 +90,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - web
+
+networks:
+  web:
+    external: false
